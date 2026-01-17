@@ -9,29 +9,25 @@ const toDateKey = (d = new Date()) => {
 
 const recordPaidPayment = async (amount) => {
   const date = toDateKey();
-  await SalesStat.findOneAndUpdate(
-    { date },
-    {
-      $inc: {
-        totalRevenue: Number(amount) || 0,
-        totalPaidPayments: 1,
-      },
-    },
-    { upsert: true, new: true }
-  );
+  const [stat, created] = await SalesStat.findOrCreate({
+    where: { date },
+    defaults: { totalRevenue: 0, totalPaidPayments: 0, totalOrders: 0 }
+  });
+
+  await stat.increment({
+    totalRevenue: Number(amount) || 0,
+    totalPaidPayments: 1
+  });
 };
 
 const recordCreatedOrder = async () => {
   const date = toDateKey();
-  await SalesStat.findOneAndUpdate(
-    { date },
-    {
-      $inc: {
-        totalOrders: 1,
-      },
-    },
-    { upsert: true, new: true }
-  );
+  const [stat, created] = await SalesStat.findOrCreate({
+    where: { date },
+    defaults: { totalRevenue: 0, totalPaidPayments: 0, totalOrders: 0 }
+  });
+
+  await stat.increment('totalOrders', { by: 1 });
 };
 
 module.exports = {

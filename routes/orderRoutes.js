@@ -53,7 +53,7 @@ router.get('/:id', [
 router.put('/:id/status', [
   authorize('staff', 'owner'),
   param('id', 'Please provide a valid order ID').isInt(),
-  body('status', 'Status is required').isIn(['pending', 'processing', 'completed', 'cancelled'])
+  body('status', 'Status is required').isIn(['pending', 'accepted', 'preparing', 'ready', 'completed', 'cancelled'])
 ], validate, updateOrderStatus);
 
 // Staff and Owner can update order item status

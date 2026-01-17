@@ -1,13 +1,31 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const sequelize = require('../config/database');
 
-const SalesStatSchema = new mongoose.Schema(
-  {
-    date: { type: String, required: true, unique: true }, // YYYY-MM-DD
-    totalRevenue: { type: Number, default: 0 },
-    totalOrders: { type: Number, default: 0 },
-    totalPaidPayments: { type: Number, default: 0 },
+const SalesStat = sequelize.define('SalesStat', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
   },
-  { timestamps: true }
-);
+  date: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    unique: true
+  },
+  totalRevenue: {
+    type: DataTypes.DECIMAL(14, 2),
+    defaultValue: 0
+  },
+  totalOrders: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0
+  },
+  totalPaidPayments: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0
+  }
+}, {
+  timestamps: true
+});
 
-module.exports = mongoose.model('SalesStat', SalesStatSchema);
+module.exports = SalesStat;

@@ -3,166 +3,195 @@ const Payment = require('../models/payment');
 const Menu = require('../models/menu');
 const userRepository = require('../repositories/userRepository');
 const bcrypt = require('bcryptjs');
+const { Op } = require('sequelize');
 
 const getOrders = async (req, res) => {
-  const { status, page = 1, limit = 20 } = req.query;
-  const filter = {};
-  if (status) filter.status = String(status);
+  try {
+    const { status, page = 1, limit = 20 } = req.query;
+    const where = {};
+    if (status) where.status = String(status);
 
-  const pageNum = Number(page);
-  const lim = Number(limit);
-  const skip = (pageNum - 1) * lim;
+    const pageNum = Number(page);
+    const lim = Number(limit);
+    const offset = (pageNum - 1) * lim;
 
-  const orders = await Order.find(filter)
-    .sort({ createdAt: -1 })
-    .skip(skip)
-    .limit(lim)
-    .lean();
+    const { count, rows: orders } = await Order.findAndCountAll({
+      where,
+      order: [['createdAt', 'DESC']],
+      limit: lim,
+      offset: offset
+    });
 
-  const total = await Order.countDocuments(filter);
-
-  return res.json({
-    success: true,
-    data: {
-      orders,
-      pagination: {
-        currentPage: pageNum,
-        totalPages: Math.ceil(total / lim),
-        totalItems: total,
+    return res.json({
+      success: true,
+      data: {
+        orders,
+        pagination: {
+          currentPage: pageNum,
+          totalPages: Math.ceil(count / lim),
+          totalItems: count,
+        },
       },
-    },
-  });
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 const updateOrderStatus = async (req, res) => {
-  const { id } = req.params;
-  const { status } = req.body;
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
 
-  const allowedStatuses = ['pending', 'accepted', 'preparing', 'ready', 'completed', 'cancelled'];
-  if (!allowedStatuses.includes(status)) {
-    return res.status(400).json({ success: false, message: 'Invalid status' });
+    const allowedStatuses = ['pending', 'accepted', 'preparing', 'ready', 'completed', 'cancelled'];
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid status' });
+    }
+
+    const [updatedCount, updatedRows] = await Order.update(
+      { status },
+      {
+        where: { id: Number(id) },
+        returning: true
+      }
+    );
+
+    if (updatedCount === 0) return res.status(404).json({ success: false, message: 'Order not found' });
+    return res.json({ success: true, data: updatedRows[0] });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
   }
-
-  const updated = await Order.findOneAndUpdate(
-    { id: Number(id) },
-    { $set: { status } },
-    { new: true }
-  ).lean();
-
-  if (!updated) return res.status(404).json({ success: false, message: 'Order not found' });
-  return res.json({ success: true, data: updated });
 };
 
 const confirmManualPayment = async (req, res) => {
-  const { id } = req.params;
+  try {
+    const { id } = req.params;
 
-  const order = await Order.findOne({ id: Number(id) }).lean();
-  if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+    const order = await Order.findByPk(Number(id));
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
 
-  const payment = await Payment.findOne({ orderId: Number(id), paymentMethod: 'manual' }).lean();
-  if (!payment) return res.status(404).json({ success: false, message: 'Manual payment not found' });
+    const payment = await Payment.findOne({
+      where: { orderId: Number(id), paymentMethod: 'manual' }
+    });
 
-  if (payment.status !== 'pending') {
-    return res.status(400).json({ success: false, message: 'Payment already processed' });
+    if (!payment) return res.status(404).json({ success: false, message: 'Manual payment not found' });
+
+    if (payment.status !== 'pending') {
+      return res.status(400).json({ success: false, message: 'Payment already processed' });
+    }
+
+    payment.status = 'paid';
+    await payment.save();
+
+    order.status = 'completed';
+    await order.save();
+
+    return res.json({ success: true, data: payment });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
   }
-
-  const updatedPayment = await Payment.findOneAndUpdate(
-    { orderId: Number(id), paymentMethod: 'manual' },
-    { $set: { status: 'paid' } },
-    { new: true }
-  ).lean();
-
-  await Order.findOneAndUpdate(
-    { id: Number(id) },
-    { $set: { status: 'completed' } }
-  );
-
-  return res.json({ success: true, data: updatedPayment });
 };
 
 const getReceipt = async (req, res) => {
-  const { id } = req.params;
+  try {
+    const { id } = req.params;
 
-  const order = await Order.findOne({ id: Number(id) })
-    .lean();
+    const order = await Order.findByPk(Number(id));
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
 
-  if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+    const items = await Promise.all(
+      order.items.map(async (item) => {
+        const menu = await Menu.findByPk(Number(item.menuId));
+        return {
+          ...item,
+          menuName: menu ? menu.name : 'Unknown',
+          menuPrice: menu ? menu.price : 0,
+        };
+      })
+    );
 
-  const items = await Promise.all(
-    order.items.map(async (item) => {
-      const menu = await Menu.findOne({ id: item.menuId }).lean();
-      return {
-        ...item,
-        menuName: menu ? menu.name : 'Unknown',
-        menuPrice: menu ? menu.price : 0,
-      };
-    })
-  );
+    const receipt = {
+      ...order.toJSON(),
+      items,
+    };
 
-  const receipt = {
-    ...order,
-    items,
-  };
-
-  return res.json({ success: true, data: receipt });
+    return res.json({ success: true, data: receipt });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 // Staff Management Functions
 
 const getAllStaff = async (req, res) => {
-  const users = await userRepository.getAll();
-  // Return all users for Owner's User Management
-  return res.json({ success: true, data: users });
+  try {
+    const users = await userRepository.getAll();
+    return res.json({ success: true, data: users });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 const createStaff = async (req, res) => {
-  const { name, email, password, role, status } = req.body;
+  try {
+    const { name, email, password, role, status } = req.body;
 
-  const existing = await userRepository.findByEmail(email);
-  if (existing) {
-    return res.status(409).json({ success: false, message: 'Email already registered' });
+    const existing = await userRepository.findByEmail(email);
+    if (existing) {
+      return res.status(409).json({ success: false, message: 'Email already registered' });
+    }
+
+    // Pass direct password, UserRepository will handle the rest via Model hooks if implemented correctly
+    const created = await userRepository.createUser({
+      name,
+      email,
+      password, // Use direct password since userRepository now uses User model with hooks
+      role: role || 'staff',
+      status: status || 'active'
+    });
+
+    return res.status(201).json({
+      success: true,
+      data: {
+        id: created.id,
+        email: created.email,
+        role: created.role,
+        name: created.name,
+        status: created.status
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
   }
-
-  const passwordHash = await bcrypt.hash(String(password), 10);
-  const created = await userRepository.createUser({
-    name,
-    email,
-    passwordHash,
-    role: role || 'staff',
-    status: status || 'active'
-  });
-
-  return res.status(201).json({
-    success: true,
-    data: {
-      id: created.id,
-      email: created.email,
-      role: created.role,
-      name: created.name,
-      status: created.status
-    },
-  });
 };
 
 const updateStaff = async (req, res) => {
-  const { id } = req.params;
-  const { name, email, role, status } = req.body;
+  try {
+    const { id } = req.params;
+    const { name, email, role, status } = req.body;
 
-  const updated = await userRepository.updateUser(id, { name, email, role, status });
-  if (!updated) {
-    return res.status(404).json({ success: false, message: 'User not found or update failed' });
+    const updated = await userRepository.updateUser(id, { name, email, role, status });
+    if (!updated) {
+      return res.status(404).json({ success: false, message: 'User not found or update failed' });
+    }
+
+    return res.json({ success: true, data: updated });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
   }
-
-  return res.json({ success: true, data: updated });
 };
 
 const deleteStaff = async (req, res) => {
-  const { id } = req.params;
-  const ok = await userRepository.remove(id);
-  if (!ok) {
-    return res.status(404).json({ success: false, message: 'User not found' });
+  try {
+    const { id } = req.params;
+    const ok = await userRepository.remove(id);
+    if (!ok) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    return res.json({ success: true, message: 'Staff deleted successfully' });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
   }
-  return res.json({ success: true, message: 'Staff deleted successfully' });
 };
 
 module.exports = {

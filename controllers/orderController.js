@@ -1,27 +1,38 @@
 const Menu = require('../models/menu');
 const Order = require('../models/order');
-const { getNextSequence } = require('../services/mongoSequence');
+const sequelize = require('../config/database');
 const { recordCreatedOrder } = require('../services/salesStatService');
+const { Op } = require('sequelize');
 
 const buildItemsWithPrice = async (items) => {
-  const ids = items.map((i) => Number(i.menuId));
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    console.warn('[OrderController] No items provided to buildItemsWithPrice');
+    return [];
+  }
+
+  const ids = items.map((i) => Number(i.menuId)).filter(id => !isNaN(id) && id > 0);
+  if (ids.length === 0) {
+    console.warn('[OrderController] No valid menu IDs found in items');
+    return [];
+  }
+
   console.log('[OrderController] Building items for IDs:', ids);
 
-  const menus = await Menu.find({ id: { $in: ids } }).lean();
+  const menus = await Menu.findAll({
+    where: { id: { [Op.in]: ids } }
+  });
   console.log('[OrderController] Found menus count:', menus.length);
 
-  const priceMap = new Map(menus.map((m) => [m.id, m.price]));
-  console.log('[OrderController] Price Map keys:', [...priceMap.keys()]);
+  const menuMap = new Map(menus.map((m) => [m.id, { name: m.name, price: Number(m.price) }]));
 
   return items.map((it) => {
-    const price = Number(priceMap.get(Number(it.menuId)) || 0);
-    if (price === 0) console.warn(`[OrderController] WARN: Price for menuId ${it.menuId} is 0 or not found`);
-
+    const menuInfo = menuMap.get(Number(it.menuId)) || { name: 'Unknown Item', price: 0 };
     return {
-      id: null,
+      id: Date.now() + Math.floor(Math.random() * 1000), // Simple unique ID for JSONB items
       menuId: Number(it.menuId),
+      name: menuInfo.name,
       quantity: Number(it.quantity),
-      unitPrice: price,
+      unitPrice: menuInfo.price,
       status: 'pending',
     };
   });
@@ -30,105 +41,134 @@ const buildItemsWithPrice = async (items) => {
 const computeTotal = (items) => items.reduce((sum, it) => sum + Number(it.unitPrice) * Number(it.quantity), 0);
 
 const createOrder = async (req, res) => {
-  // staff/owner can also create orders (still protected by route)
-  const { tableNumber, customerName, items, paymentMethod } = req.body;
+  try {
+    const { tableNumber, customerName, items, paymentMethod } = req.body;
 
-  const enrichedItems = await buildItemsWithPrice(items);
-  for (const it of enrichedItems) {
-    // order item ids
-    // eslint-disable-next-line no-await-in-loop
-    it.id = await getNextSequence('order_item');
+    const enrichedItems = await buildItemsWithPrice(items);
+    const totalAmount = computeTotal(enrichedItems);
+
+    const order = await Order.create({
+      tableNumber: Number(tableNumber),
+      customerName: customerName ? String(customerName) : '',
+      items: enrichedItems,
+      totalAmount,
+      status: 'pending',
+      paymentMethod: paymentMethod || 'manual',
+    });
+
+    await recordCreatedOrder();
+
+    return res.status(201).json({ success: true, data: order });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
   }
-
-  const id = await getNextSequence('order');
-  const totalAmount = computeTotal(enrichedItems);
-  const order = await Order.create({
-    id,
-    tableNumber: Number(tableNumber),
-    customerName: customerName ? String(customerName) : '',
-    items: enrichedItems,
-    totalAmount,
-    status: 'pending',
-    paymentMethod: paymentMethod || 'manual',
-  });
-
-  await recordCreatedOrder();
-
-  return res.status(201).json({ success: true, data: order.toObject() });
 };
 
 const createGuestOrder = async (req, res) => {
-  const { tableNumber, customerName, items } = req.body;
+  try {
+    const { tableNumber, customerName, items } = req.body;
 
-  const enrichedItems = await buildItemsWithPrice(items);
-  for (const it of enrichedItems) {
-    // eslint-disable-next-line no-await-in-loop
-    it.id = await getNextSequence('order_item');
+    const enrichedItems = await buildItemsWithPrice(items);
+    const totalAmount = computeTotal(enrichedItems);
+
+    const order = await Order.create({
+      tableNumber: Number(tableNumber),
+      customerName: customerName ? String(customerName) : '',
+      items: enrichedItems,
+      totalAmount,
+      status: 'pending',
+      paymentMethod: 'guest',
+    });
+
+    await recordCreatedOrder();
+
+    return res.status(201).json({ success: true, data: order });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
   }
-
-  const id = await getNextSequence('order');
-  const totalAmount = computeTotal(enrichedItems);
-  const order = await Order.create({
-    id,
-    tableNumber: Number(tableNumber),
-    customerName: customerName ? String(customerName) : '',
-    items: enrichedItems,
-    totalAmount,
-    status: 'pending',
-    paymentMethod: 'guest',
-  });
-
-  await recordCreatedOrder();
-
-  return res.status(201).json({ success: true, data: order.toObject() });
 };
 
-const getOrders = (req, res) => {
-  return Order.find({}).sort({ createdAt: -1 }).lean().then((orders) => res.json({ success: true, data: orders }));
+const getOrders = async (req, res) => {
+  try {
+    const orders = await Order.findAll({ order: [['createdAt', 'DESC']] });
+
+    // Enrich items with names if missing (for older data)
+    const enrichedOrders = await Promise.all(orders.map(async (order) => {
+      const plainOrder = order.get({ plain: true });
+      const needsEnrichment = plainOrder.items.some(item => !item.name);
+
+      if (needsEnrichment) {
+        plainOrder.items = await buildItemsWithPrice(plainOrder.items);
+      }
+      return plainOrder;
+    }));
+
+    return res.json({ success: true, data: enrichedOrders });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
 };
 
-const getOrder = (req, res) => {
-  return Order.findOne({ id: Number(req.params.id) })
-    .lean()
-    .then((order) => {
-      if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
-      return res.json({ success: true, data: order });
+const getOrder = async (req, res) => {
+  try {
+    const order = await Order.findByPk(Number(req.params.id));
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+    return res.json({ success: true, data: order });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const getGuestOrder = async (req, res) => {
+  try {
+    const order = await Order.findByPk(Number(req.params.id));
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+    return res.json({ success: true, data: order });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const updateOrderStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+    const [updatedCount, updatedRows] = await Order.update(
+      { status: String(status) },
+      { where: { id: Number(req.params.id) }, returning: true }
+    );
+
+    if (updatedCount === 0) return res.status(404).json({ success: false, message: 'Order not found' });
+    return res.json({ success: true, data: updatedRows[0] });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const updateOrderItemStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+    const itemId = Number(req.params.id);
+
+    // This is tricky with JSONB. We need to find the order and update the items array.
+    const order = await Order.findOne({
+      where: sequelize.literal(`items @> '[{"id": ${itemId}}]'`)
     });
-};
 
-const getGuestOrder = (req, res) => {
-  return Order.findOne({ id: Number(req.params.id) })
-    .lean()
-    .then((order) => {
-      if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
-      return res.json({ success: true, data: order });
-    });
-};
+    if (!order) return res.status(404).json({ success: false, message: 'Order item not found' });
 
-const updateOrderStatus = (req, res) => {
-  const { status } = req.body;
-  return Order.findOneAndUpdate({ id: Number(req.params.id) }, { $set: { status: String(status) } }, { new: true })
-    .lean()
-    .then((order) => {
-      if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
-      return res.json({ success: true, data: order });
+    const updatedItems = order.items.map(item => {
+      if (item.id === itemId) return { ...item, status: String(status) };
+      return item;
     });
-};
 
-const updateOrderItemStatus = (req, res) => {
-  const { status } = req.body;
-  const itemId = Number(req.params.id);
-  return Order.findOneAndUpdate(
-    { 'items.id': itemId },
-    { $set: { 'items.$.status': String(status) } },
-    { new: true }
-  )
-    .lean()
-    .then((order) => {
-      if (!order) return res.status(404).json({ success: false, message: 'Order item not found' });
-      const item = (order.items || []).find((i) => i.id === itemId);
-      return res.json({ success: true, data: { order, item } });
-    });
+    order.items = updatedItems;
+    await order.save();
+
+    const item = order.items.find(i => i.id === itemId);
+    return res.json({ success: true, data: { order, item } });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 module.exports = {

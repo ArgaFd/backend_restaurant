@@ -20,6 +20,9 @@
     "jsonwebtoken": "^9.0.2",
     "midtrans-client": "^1.4.3",
     "mongoose": "^8.19.1",
-    "pg": "^8.13.3"
+    "nodemailer": "^7.0.12",
+    "pg": "^8.13.3",
+    "pg-hstore": "^2.3.4",
+    "sequelize": "^6.37.7"
   }
 }

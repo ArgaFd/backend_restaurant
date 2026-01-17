@@ -17,7 +17,7 @@ const getSnap = () => {
   });
 };
 
-const createSnapTransaction = async ({ orderId, grossAmount, customerDetails }) => {
+const createSnapTransaction = async ({ orderId, grossAmount, customerDetails, itemDetails }) => {
   const snap = getSnap();
 
   const parameter = {
@@ -28,6 +28,7 @@ const createSnapTransaction = async ({ orderId, grossAmount, customerDetails }) 
     credit_card: {
       secure: true,
     },
+    item_details: itemDetails || undefined,
     customer_details: customerDetails || undefined,
   };
 

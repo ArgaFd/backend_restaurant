@@ -1,30 +1,34 @@
 require('dotenv').config();
 
 const app = require('./app');
-const { pingPostgres } = require('./db/postgres');
-const { connectMongo } = require('./db/mongo');
+const sequelize = require('./config/database');
 
 const PORT = process.env.PORT || 5000;
 
 const start = async () => {
-  await pingPostgres();
-  await connectMongo();
+  try {
+    // Test database connection
+    await sequelize.authenticate();
+    console.log('PostgreSQL (Sequelize) connected successfully.');
 
-  app.listen(PORT, () => {
-    // eslint-disable-next-line no-console
-    console.log(`API running on port ${PORT}`);
-    // eslint-disable-next-line no-console
-    console.log(`Local: http://localhost:${PORT}`);
+    // Sync models
+    // In development, you might want { alter: true } or { force: false }
+    // For now { alter: true } is helpful to ensure tables exist
+    await sequelize.sync({ alter: process.env.NODE_ENV === 'development' });
+    console.log('Database models synced.');
 
-    // Debug Server Key at Startup
-    const sk = process.env.MIDTRANS_SERVER_KEY || '';
-    const maskedSk = sk.length > 5 ? sk.substring(0, 5) + '...' + sk.substring(sk.length - 3) : 'NOT_SET';
-    console.log(`[Startup] Loaded Server Key: ${maskedSk}`);
-  });
+    app.listen(PORT, () => {
+      console.log(`API running on port ${PORT}`);
+      console.log(`Local: http://localhost:${PORT}`);
+
+      const sk = process.env.MIDTRANS_SERVER_KEY || '';
+      const maskedSk = sk.length > 5 ? sk.substring(0, 5) + '...' + sk.substring(sk.length - 3) : 'NOT_SET';
+      console.log(`[Startup] Loaded Server Key: ${maskedSk}`);
+    });
+  } catch (error) {
+    console.error('Unable to connect to the database:', error);
+    process.exit(1);
+  }
 };
 
-start().catch((err) => {
-  // eslint-disable-next-line no-console
-  console.error(err);
-  process.exit(1);
-});
+start();
