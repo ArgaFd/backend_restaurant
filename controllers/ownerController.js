@@ -49,7 +49,7 @@ const getSalesReport = async (req, res) => {
     // PostgreSQL specific aggregation for periods - using Asia/Jakarta timezone for grouping
     const tz = 'Asia/Jakarta';
     const createdAtTz = `("createdAt" AT TIME ZONE 'UTC' AT TIME ZONE '${tz}')`;
-    const dateFormat = period === 'daily' ? 'YYYY-MM-DD' :
+    const dateFormat = period === 'daily' ? 'HH24:MI' : // Group by Minute for precise time
       period === 'weekly' ? 'IYYY-IW' : // ISO Year-Week
         'YYYY-MM';
 
