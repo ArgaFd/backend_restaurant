@@ -12,6 +12,15 @@ const normalizeMenuPayload = (payload) => {
   return payload;
 };
 
+const isValidUrl = (string) => {
+  try {
+    new URL(string);
+    return string.startsWith('http://') || string.startsWith('https://');
+  } catch (_) {
+    return false;
+  }
+};
+
 const getMenuItems = async (req, res) => {
   try {
     const { category, subcategory, minPrice, maxPrice, q } = req.query;
@@ -77,6 +86,11 @@ const createMenuItem = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid subcategory for this category.' });
     }
 
+    // Validate image_url if provided
+    if (payload.image_url && !isValidUrl(payload.image_url)) {
+      return res.status(400).json({ success: false, message: 'Invalid Image URL format. Must start with http:// or https://' });
+    }
+
     const created = await Menu.create(payload);
     return res.status(201).json({ success: true, data: created });
   } catch (error) {
@@ -96,6 +110,11 @@ const updateMenuItem = async (req, res) => {
       if (payload.subcategory && !cat.subcategories.includes(payload.subcategory)) {
         return res.status(400).json({ success: false, message: 'Invalid subcategory' });
       }
+    }
+
+    // Validate image_url if provided
+    if (payload.image_url && !isValidUrl(payload.image_url)) {
+      return res.status(400).json({ success: false, message: 'Invalid Image URL format.' });
     }
 
     const [updatedCount, updatedItems] = await Menu.update(payload, {

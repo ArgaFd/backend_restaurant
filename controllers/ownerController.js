@@ -46,14 +46,16 @@ const getSalesReport = async (req, res) => {
 
     console.log(`[OwnerController] Date Range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
-    // PostgreSQL specific aggregation for periods
+    // PostgreSQL specific aggregation for periods - using Asia/Jakarta timezone for grouping
+    const tz = 'Asia/Jakarta';
+    const createdAtTz = `("createdAt" AT TIME ZONE 'UTC' AT TIME ZONE '${tz}')`;
     const dateFormat = period === 'daily' ? 'YYYY-MM-DD' :
       period === 'weekly' ? 'IYYY-IW' : // ISO Year-Week
         'YYYY-MM';
 
     const orderStats = await Order.findAll({
       attributes: [
-        [sequelize.fn('to_char', sequelize.col('createdAt'), dateFormat), 'periodLabel'],
+        [sequelize.fn('to_char', sequelize.literal(createdAtTz), dateFormat), 'periodLabel'],
         [sequelize.fn('MIN', sequelize.col('createdAt')), 'minDate'],
         [sequelize.fn('SUM', sequelize.col('totalAmount')), 'totalRevenue'],
         [sequelize.fn('COUNT', sequelize.col('id')), 'orderCount']
@@ -65,13 +67,13 @@ const getSalesReport = async (req, res) => {
           [Op.lte]: endDate
         }
       },
-      group: [sequelize.fn('to_char', sequelize.col('createdAt'), dateFormat)],
+      group: [sequelize.fn('to_char', sequelize.literal(createdAtTz), dateFormat)],
       order: [[sequelize.fn('MIN', sequelize.col('createdAt')), 'ASC']],
       raw: true
     });
 
     // Top Selling Items from JSONB
-    // We use a raw query because unnesting JSONB is much cleaner in SQL
+    // Also use the same timezone for the top selling items range check
     const topSellingItems = await sequelize.query(`
       SELECT 
         jsonb_extract_path_text(item, 'menuId') as "menuId",
@@ -79,7 +81,8 @@ const getSalesReport = async (req, res) => {
         SUM((jsonb_extract_path_text(item, 'quantity'))::numeric) as quantity,
         SUM((jsonb_extract_path_text(item, 'quantity'))::numeric * (jsonb_extract_path_text(item, 'unitPrice'))::numeric) as "totalRevenue"
       FROM "Orders", jsonb_array_elements("items") as item
-      WHERE status IN ('accepted', 'preparing', 'ready', 'completed') AND "createdAt" >= :startDate AND "createdAt" <= :endDate
+      WHERE status IN ('accepted', 'preparing', 'ready', 'completed') 
+      AND "createdAt" >= :startDate AND "createdAt" <= :endDate
       GROUP BY "menuId"
       ORDER BY quantity DESC
       LIMIT 10

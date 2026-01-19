@@ -1,6 +1,7 @@
 {
   "name": "restaurant-app-backend",
   "version": "1.0.0",
+  "license": "UNLICENSED",
   "private": true,
   "main": "server.js",
   "scripts": {
@@ -19,7 +20,6 @@
     "helmet": "^7.2.0",
     "jsonwebtoken": "^9.0.2",
     "midtrans-client": "^1.4.3",
-    "mongoose": "^8.19.1",
     "nodemailer": "^7.0.12",
     "pg": "^8.13.3",
     "pg-hstore": "^2.3.4",
