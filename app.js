@@ -115,13 +115,13 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/staff', staffRoutes);
 app.use('/api/owner', ownerRoutes);
 
-// Serve static files in production
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../frontend/dist')));
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
-  });
-}
+// Serve static files in production - REMOVED for separate deployment
+// if (process.env.NODE_ENV === 'production') {
+//   app.use(express.static(path.join(__dirname, '../frontend/dist')));
+//   app.get('*', (req, res) => {
+//     res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+//   });
+// }
 
 // 404 Handler
 app.use(notFoundHandler);
