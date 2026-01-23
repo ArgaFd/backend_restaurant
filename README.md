@@ -23,13 +23,17 @@ Diagram ini menggambarkan siapa saja pengguna sistem (Aktor) dan apa saja fungsi
 ```mermaid
 graph LR
     subgraph "Restaurant POS System"
+        UC_Login([Login & Auth])
+        
         UC1([Scan QR Table])
         UC2([View Digital Menu])
         UC3([Place Order])
         UC4([Track Order Status])
+        
         UC5([Manage Orders])
         UC6([Process Payment])
-        UC7([Update Menu Availability])
+        UC_Print([Print Receipt])
+        
         UC8([Manage Staff Account])
         UC9([View Sales Reports])
         UC10([Manage Menu Content])
@@ -39,6 +43,7 @@ graph LR
     S["👨‍🍳 Staff"]
     O["👑 Owner"]
 
+    %% Direct Associations
     C --> UC1
     C --> UC2
     C --> UC3
@@ -46,13 +51,26 @@ graph LR
 
     S --> UC5
     S --> UC6
-    S --> UC7
-
+    
     O --> UC8
     O --> UC9
     O --> UC10
     O --> UC5
+
+    %% Include & Extend Relationships
+    UC5 -. "<<include>>" .-> UC_Login
+    UC8 -. "<<include>>" .-> UC_Login
+    UC9 -. "<<include>>" .-> UC_Login
+    UC10 -. "<<include>>" .-> UC_Login
+    
+    UC6 -. "<<extend>>" .-> UC_Print
+    UC3 -. "<<include>>" .-> UC2
 ```
+
+**Penjelasan Relasi:**
+- **Association**: Garis lurus menunjukkan interaksi langsung aktor dengan fungsi.
+- **`<<include>>`**: Menunjukkan fungsionalitas yang **wajib** ada. Misal: Staff/Owner **wajib** Login untuk mengelola data. `Place Order` juga menyertakan proses `View Menu`.
+- **`<<extend>>`**: Menunjukkan fungsionalitas **opsional**. Misal: `Print Receipt` hanya dilakukan jika pembayaran sukses atau pelanggan meminta.
 
 **Penjelasan:**
 - **Customer**: Berinteraksi secara mandiri melalui mobile device (Scan QR). Fokus pada reservasi meja dan pemesanan.
