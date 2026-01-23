@@ -114,7 +114,7 @@ graph TD
 ---
 
 ### 3. Entity Relationship Diagram (ERD)
-Dokumentasikan arsitektur database lengkap yang terdiri dari 7 tabel utama untuk mendukung operasional dan sistem keamanan.
+Dokumentasi ini menyajikan arsitektur database relasional yang dirancang untuk mendukung sistem POS SO agar memiliki integritas data yang tinggi, audit trail yang aman, dan performa dashboard yang optimal.
 
 ```mermaid
 erDiagram
@@ -127,93 +127,115 @@ erDiagram
 
     users {
         bigint id PK
-        string name
-        string email UK
-        string password_hash
-        string role
-        string status
+        string name "Identitas asli user/karyawan"
+        string email UK "Primary identifier untuk login"
+        string password_hash "Keamanan (Bcrypt encryption)"
+        string role "Akses: owner atau staff"
+        string status "Ketersediaan akun: active/inactive"
     }
 
     Categories {
         integer id PK
-        string name UK "Nama kategori unik"
-        string[] subcategories "Array sub-kategori"
-        string icon "Emoji/Icon representasi"
+        string name UK "Label kategori unik (Makanan, Minuman, ds)"
+        string[] subcategories "Sub-item untuk filter lebih detail"
+        string icon "Representasi visual (Emoji/Icon)"
     }
 
     Menus {
         bigint id PK
-        string name
-        decimal price
-        string category "FK reference to Categories"
-        string image_url
-        string status
+        string name "Judul menu yang tampil di katalog"
+        decimal price "Harga jual terkini"
+        string category "Relasi logis ke tabel Categories"
+        string image_url "Path penyimpanan gambar di server/cloud"
+        string status "Ketersediaan: available atau unavailable"
     }
 
     Orders {
         bigint id PK
-        bigint userId FK
-        string tableNumber
-        jsonb items
-        decimal totalAmount
-        string status
-        string payment_status
+        bigint userId FK "Kaitan ke Staff yang menangani transaksi"
+        string tableNumber "Lokasi meja fisik di restoran"
+        jsonb items "SNAPSHOT data menu saat dipesan"
+        decimal totalAmount "Kalkulasi akhir nilai transaksi"
+        string status "Siklus: pending, preparing, ready, completed"
+        string payment_status "Status bayar: unpaid atau paid"
     }
 
     Payments {
         bigint id PK
-        bigint orderId FK
-        string transactionId
-        string paymentType
-        decimal amount
-        string status
+        bigint orderId FK "Kaitan wajib ke Pesanan terkait"
+        string transactionId "ID unik dari Payment Gateway"
+        string paymentType "Metode: QRIS, Credit Card, dll"
+        decimal amount "Uang yang berhasil ditarik"
+        string status "Hasil: pending, settlement, failure"
     }
 
     SalesStats {
         bigint id PK
-        date date UK
-        int totalOrders
-        decimal totalRevenue
-        jsonb hourlyBreakdown
+        date date UK "Tanggal unik rangkuman harian"
+        int totalOrders "Volume transaksi harian"
+        decimal totalRevenue "Omzet kotor harian"
+        jsonb hourlyBreakdown "Data grafik performa per jam"
     }
 
     AuditLog {
         integer id PK
-        integer userId FK "User yang melakukan aksi"
-        string action "Misal: 'LOGIN', 'UPDATE_MENU'"
-        string entity "Tabel yang terdampak"
-        string entityId "ID record yang terdampak"
-        jsonb oldValue "Data sebelum perubahan"
-        jsonb newValue "Data sesudah perubahan"
-        string ipAddress
-        timestamp timestamp
+        integer userId FK "Siapa yang melakukan perubahan"
+        string action "Aksi audit: LOGIN, UPDATE, DELETE, dll"
+        string entity "Nama tabel yang dimodifikasi"
+        string entityId "ID spesifik data yang diubah"
+        jsonb oldValue "Keadaan data SEBELUM perubahan"
+        jsonb newValue "Keadaan data SESUDAH perubahan"
+        string ipAddress "Alamat jaringan pelaku"
+        timestamp timestamp "Waktu presisi kejadian (ISO 8601)"
     }
 ```
 
 ---
 
-#### 📋 Deskripsi Tabel & Fungsi (Lengkap 7 Tabel)
-1. **Tabel `users`**: Master data personil (Owner & Staff) untuk autentikasi dan otorisasi.
-2. **Tabel `Categories`**: Master klasifikasi menu. Digunakan untuk filter pada menu digital dan pengelompokan laporan.
-3. **Tabel `Menus`**: Data katalog produk. Memiliki keterkaitan logis dengan `Categories`.
-4. **Tabel `Orders`**: Mencatat setiap transaksi pesanan. Menggunakan snapshot JSONB untuk menjaga integritas history harga.
-5. **Tabel `Payments`**: Detail transaksi keuangan yang terhubung ke gateway pembayaran Midtrans.
-6. **Tabel `SalesStats`**: Tabel optimasi yang menyimpan agregasi data penjualan harian untuk performa dashboard yang cepat.
-7. **Tabel `AuditLog`**: Rekam jejak aktivitas sensitif. Berguna untuk mendeteksi siapa yang melakukan perubahan data (misal: merubah harga menu atau menghapus order).
+#### 📋 Penjelasan Mendalam Mengenai Tabel (Deep Dive)
+
+Arsitektur database ini dirancang agar data tidak hanya tersimpan, tetapi juga memiliki fungsi kontrol, akurasi finansial, dan audit yang sangat ketat:
+
+1.  **Tabel `users` (Manajemen Pengguna & Akses)**
+    *   **Fungsi Utama**: Menjadi pusat kendali identitas sistem. Setiap akses ke dashboard admin (Owner atau Staff) harus melalui validasi tabel ini.
+    *   **Keamanan Tingkat Tinggi**: Sistem **tidak pernah** menyimpan password dalam bentuk teks biasa. Kolom `password_hash` menyimpan kunci terenkripsi (Bcrypt) yang hampir mustahil untuk ditembus, menjamin privasi pengguna meskipun database terekspos.
+    *   **Role-Based Access Control (RBAC)**: Melalui kolom `role`, sistem memisahkan hak akses secara otomatis. Owner memiliki akses ke laporan keuangan (SalesStats) dan SDM (AuditLog), sementara Staff hanya memiliki akses ke operasional pesanan (Orders).
+
+2.  **Tabel `Categories` (Struktur Organisasi Menu)**
+    *   **Fungsi Utama**: Memberikan struktur hirarkis pada katalog produk agar pelanggan tidak bingung saat memesan.
+    *   **Fleksibilitas Data**: Field `subcategories` menggunakan tipe data *Array*, memungkinkan satu kategori (misal: "Minuman") memiliki banyak turunan ("Kopi", "Teh", "Susu") dalam satu baris data saja, sehingga query lebih efisien.
+    *   **Daya Tarik Visual**: Kolom `icon` menyimpan informasi visual yang mempercantik tampilan menu digital di sisi pelanggan.
+
+3.  **Tabel `Menus` (Pusat Informasi Produk)**
+    *   **Fungsi Utama**: Katalog master produk restoran.
+    *   **Manajemen Inventaris Digital**: Kolom `status` bertindak sebagai sakelar (*switch*). Jika menu habis, owner cukup mengubahnya ke `unavailable` agar otomatis hilang dari menu QR pelanggan tanpa menghapus riwayat datanya.
+
+4.  **Tabel `Orders` (Inti Transaksi & Integritas Sejarah)**
+    *   **Inovasi Teknologi: JSONB Snapshot**: Ini adalah bagian paling cerdas dari arsitektur ini. Sistem menyimpan data menu (Nama & Harga saat itu) langsung ke dalam satu kolom `items` berformat JSONB.
+    *   **Kenapa Ini Krusial?**: Dalam dunia nyata, harga makanan sering naik-turun. Jika harga "Nasi Goreng" naik besok di tabel `Menus`, pesanan yang dibuat pelanggan hari ini tidak akan ikut naik. Data "difoto" (snapshot) pada saat transaksi dibuat agar laporan keuangan masa lalu tetap akurat selamanya.
+
+5.  **Tabel `Payments` (Jembatan Rekonsiliasi Gateway)**
+    *   **Fungsi Utama**: Mencatat bukti sah pembayaran digital.
+    *   **Sinkronisasi Payment Gateway**: Kolom `transactionId` menyimpan ID unik dari Midtrans. Ini memungkinkan sistem melakukan sinkronisasi otomatis via Webhook; jika pelanggan membayar di HP-nya, database akan otomatis terupdate tanpa perlu konfirmasi manual dari kasir.
+
+6.  **Tabel `SalesStats` (Optimasi Performa Dashboard)**
+    *   **Fungsi Utama**: Tabel agregasi untuk mendukung visualisasi grafik owner.
+    *   **Strategi Anti-Lag**: Jika sistem harus menghitung ribuan transaksi setiap kali Owner membuka laporan, dashboard akan menjadi sangat lambat. Tabel ini secara otomatis merangkum pendapatan kotor dan jumlah order secara harian agar tampilan grafik (Charts) muncul secara instan di layar Owner.
+
+7.  **Tabel `AuditLog` (Sistem Pertanggungjawaban/Forensik)**
+    *   **Fungsi Utama**: Mesin waktu dan sistem pengawasan keamanan.
+    *   **Transparansi Mutlak**: Setiap aksi "berbahaya" (seperti mengubah harga menu, menghapus staff, atau membatalkan pesanan yang sudah dibayar) akan dicatat di sini. Tabel ini menyimpan data SEBELUM (`oldValue`) dan SESUDAH (`newValue`) perubahan, sehingga jika terjadi kecurangan internal, Owner dapat melacak siapa pelakunya berdasarkan `ipAddress` dan `userId`.
 
 ---
 
-#### 🔗 Penjelasan Relasi (Cardinality)
-- **Many-to-One (`Orders` -> `users`)**: Pesanan dapat ditangani oleh salah satu staff/owner.
-- **Many-to-One (`Menus` -> `Categories`)**: Banyak menu dapat termasuk dalam satu kategori yang sama.
-- **One-to-Many (`users` -> `AuditLog`)**: Satu user dapat menghasilkan banyak log aktivitas untuk keperluan audit keamanan.
-- **One-to-One (`Orders` -> `Payments`)**: Setiap pesanan valid memiliki tepat satu log transaksi pembayaran (berhasil/gagal).
-- **Loose Coupling**: Beberapa tabel seperti `SalesStats` dan `AuditLog` dirancang untuk memiliki dependensi minimal agar tidak mengganggu performa transaksi utama jika terjadi lonjakan data.
+#### 🔗 Narasi Relasi Logika (Arsitektur Komunikasi Data)
 
-**Penjelasan Relasi:**
-- **Orders.items (JSONB)**: Ini adalah fitur unggulan dimana detail item pesanan disimpan dalam satu kolom JSON, sehingga query lebih cepat tanpa banyak join tabel.
-- **Payments**: Terhubung langsung ke Order ID (`One-to-One`).
-- **SalesStats**: Tabel khusus untuk mempercepat loading grafik dashboard owner dengan menyimpan Ringkasan harian.
+Database ini menggunakan relasi yang saling mengunci untuk menjaga konsistensi:
+
+*   **Relationship `users` → `Orders`**: Menciptakan akuntabilitas. Kita selalu tahu staff mana yang melayani meja tertentu melalui tautan Foreign Key ini.
+*   **Relationship `Categories` → `Menus`**: Menjamin keteraturan. Setiap menu wajib memiliki kategori agar sistem navigasi pelanggan tidak berantakan.
+*   **Relationship `Orders` → `Payments`**: Hubungan ketergantungan 1-ke-1. Sebuah pembayaran dianggap tidak sah (orphan) jika tidak tertaut pada baris pesanan yang ada di tabel Orders.
+*   **Relationship `users` → `AuditLog`**: Hubungan pengawasan. Memberikan transparansi penuh kepada pihak manajemen atas setiap pergerakan data di dalam sistem.
 
 ---
 
