@@ -21,25 +21,23 @@ The engine for the POS SO management system. Built with Node.js and Express, des
 Diagram ini menggambarkan siapa saja pengguna sistem (Aktor) dan apa saja fungsi utama yang bisa mereka lakukan.
 
 ```mermaid
-useCaseDiagram
-    actor "Customer" as C
-    actor "Staff (Waiter/Chef/Cashier)" as S
-    actor "Owner" as O
+graph LR
+    subgraph "Restaurant POS System"
+        UC1([Scan QR Table])
+        UC2([View Digital Menu])
+        UC3([Place Order])
+        UC4([Track Order Status])
+        UC5([Manage Orders])
+        UC6([Process Payment])
+        UC7([Update Menu Availability])
+        UC8([Manage Staff Account])
+        UC9([View Sales Reports])
+        UC10([Manage Menu Content])
+    end
 
-    package "Restaurant POS System" {
-        usecase "Scan QR Table" as UC1
-        usecase "View Digital Menu" as UC2
-        usecase "Place Order" as UC3
-        usecase "Track Order Status" as UC4
-        
-        usecase "Manage Orders" as UC5
-        usecase "Process Payment" as UC6
-        usecase "Update Menu Availability" as UC7
-        
-        usecase "Manage Staff Account" as UC8
-        usecase "View Sales Reports" as UC9
-        usecase "Manage Menu Content" as UC10
-    }
+    C["👤 Customer"]
+    S["👨‍🍳 Staff"]
+    O["👑 Owner"]
 
     C --> UC1
     C --> UC2
