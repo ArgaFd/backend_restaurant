@@ -223,8 +223,30 @@ sequenceDiagram
 
 ---
 
-### 6. Sequence Diagram: Input & Bayar Pesanan
-Alur proses dari pelanggan memilih menu hingga melakukan pembayaran.
+### 6. Sequence Diagram: Input Pesanan
+Proses saat pelanggan melakukan checkout pesanan dari keranjang belanja.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Customer
+    participant Frontend as Mobile App
+    participant Backend as Express API (Railway)
+    participant PG as PostgreSQL
+
+    Customer->>Frontend: Klik "Buat Pesanan"
+    Frontend->>Backend: POST /api/orders (items, table_id, notes)
+    Backend->>PG: Validasi Stok & Menu
+    Backend->>PG: INSERT INTO "Orders" (status: 'pending')
+    PG-->>Backend: Order Created (ID: 101)
+    Backend-->>Frontend: JSON Response (Success, Order ID)
+    Frontend-->>Customer: Tampilkan Ringkasan Pesanan
+```
+
+---
+
+### 7. Sequence Diagram: Bayar Pesanan
+Alur integrasi dengan Payment Gateway untuk penyelesaian transaksi.
 
 ```mermaid
 sequenceDiagram
@@ -232,61 +254,67 @@ sequenceDiagram
     actor Customer
     participant Frontend as Mobile App
     participant Backend as Express API
-    participant PG as PostgreSQL
     participant Midtrans as Midtrans Gateway
+    participant PG as PostgreSQL
 
-    Customer->>Frontend: Klik Pesan (Checkout)
-    Frontend->>Backend: POST /api/orders (items, table_id)
-    Backend->>PG: INSERT INTO "Orders" (status: 'pending')
-    PG-->>Backend: Order Created (ID: 101)
-    Backend-->>Frontend: Success (Order ID)
-    
-    Customer->>Frontend: Pilih Metode Bayar (QRIS/Card)
+    Customer->>Frontend: Pilih "Bayar Sekarang" (QRIS/Card)
     Frontend->>Backend: POST /api/payments/:order_id
-    Backend->>Midtrans: Create Transaction Request
-    Midtrans-->>Backend: Token/Snap URL
-    Backend-->>Frontend: Snap URL/QR Data
-    
-    Midtrans->>Backend: Webhook Notification (Success)
-    Backend->>PG: UPDATE "Orders" (payment_status: 'paid')
-    Backend->>PG: SELECT items (Calculate stats)
-    Backend->>PG: UPDATE "SalesStats"
+    Backend->>Midtrans: Request Payment Token (Snap API)
+    Midtrans-->>Backend: Snap URL & Payment Token
+    Backend-->>Frontend: Kirim Data Pembayaran
+    Frontend->>Midtrans: Tampilkan UI Pembayaran
+    Customer->>Midtrans: Melakukan Pembayaran
+    Midtrans->>Backend: Post Webhook (Status: settlement)
+    Backend->>PG: UPDATE "Orders" SET payment_status = 'paid'
+    Backend-->>Customer: Notifikasi Pembayaran Berhasil
 ```
 
 ---
 
-### 7. Sequence Diagram: Update Status Pesanan & Dashboard
-Bagaimana Staff memproses pesanan dan Owner melihat hasil akhirnya.
+### 8. Sequence Diagram: Update Status Pesanan
+Proses manajemen pesanan oleh Staff (Dapur/Pelayan).
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Staff
-    actor Owner
-    participant Frontend as Dashboard UI
+    participant Frontend as Staff Dashboard
     participant Backend as Express API
     participant PG as PostgreSQL
 
-    Staff->>Frontend: Klik 'Terima' Pesanan
+    Staff->>Frontend: Cek 'Active Orders'
+    Staff->>Frontend: Klik "Terima Pesanan"
     Frontend->>Backend: PUT /api/orders/:id/status (Preparing)
     Backend->>PG: UPDATE "Orders" SET status = 'preparing'
-    PG-->>Backend: Success
-    Backend-->>Frontend: Updated UI
-    
-    Note over Owner, PG: --- Skenario Analitik ---
-    
-    Owner->>Frontend: Buka Laporan Penjualan
-    Frontend->>Backend: GET /api/owner/reports (Range: Today)
-    Backend->>PG: SELECT * FROM "SalesStats" WHERE date = today
-    PG-->>Backend: Sales Data (Revenue, Count)
-    Backend-->>Frontend: JSON Data for Charts
-    Frontend->>Frontend: Render Grafik Pendapatan
+    PG-->>Backend: Status Updated
+    Backend-->>Frontend: Update Dashboard Secara Real-time
 ```
 
 ---
 
-### 8. Sequence Diagram: Manajemen Data (Menu & Staff)
-Proses pengelolaan infrastruktur aplikasi oleh Owner.
+### 9. Sequence Diagram: Kelola Staff
+Manajemen akun karyawan oleh Owner.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Owner
+    participant Frontend as Admin Dashboard
+    participant Backend as Express API (Auth)
+    participant PG as PostgreSQL
+
+    Owner->>Frontend: Input Data Staff Baru
+    Frontend->>Backend: POST /api/auth/register (role: 'staff')
+    Backend->>Backend: Hash Password (Bcrypt)
+    Backend->>PG: INSERT INTO "users" (email, role, hash)
+    PG-->>Backend: User Created
+    Backend-->>Frontend: Success Message
+```
+
+---
+
+### 10. Sequence Diagram: Dashboard Analitik
+Proses penarikan data performa untuk laporan owner.
 
 ```mermaid
 sequenceDiagram
@@ -296,19 +324,34 @@ sequenceDiagram
     participant Backend as Express API
     participant PG as PostgreSQL
 
-    Note right of Owner: Kelola Menu
-    Owner->>Frontend: Klik 'Tambah Menu'
-    Frontend->>Backend: POST /api/menus (name, price, image)
-    Backend->>PG: INSERT INTO "Menus"
-    PG-->>Backend: Menu Created
-    Backend-->>Frontend: Updated Menu List
+    Owner->>Frontend: Buka Menu "Laporan"
+    Frontend->>Backend: GET /api/owner/reports (date_range)
+    Backend->>PG: SELECT SUM(totalAmount) FROM "Orders" (Completed)
+    Backend->>PG: SELECT * FROM "SalesStats" (Daily Agregat)
+    PG-->>Backend: Sales Data Result
+    Backend-->>Frontend: Detailed JSON Stats
+    Frontend->>Frontend: Render Chart (Chart.js/Recharts)
+```
 
-    Note right of Owner: Kelola Staff
-    Owner->>Frontend: Registrasi Akun Staff Baru
-    Frontend->>Backend: POST /api/auth/register (role: 'staff')
-    Backend->>PG: INSERT INTO "users" (password_hash)
-    PG-->>Backend: Staff Created
-    Backend-->>Frontend: Success (Staff Added)
+---
+
+### 11. Sequence Diagram: Kelola Data Menu
+Manajemen katalog produk oleh Owner.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Owner
+    participant Frontend as Admin Dashboard
+    participant Backend as Express API
+    participant PG as PostgreSQL
+
+    Owner->>Frontend: Tambah/Edit Menu Item
+    Frontend->>Backend: POST /api/menus (data, formData image)
+    Backend->>Backend: Handle Image Upload (Cloudinary/S3)
+    Backend->>PG: INSERT/UPDATE "Menus"
+    PG-->>Backend: Data Saved
+    Backend-->>Frontend: UI Update (Menu List Updated)
 ```
 
 ---
