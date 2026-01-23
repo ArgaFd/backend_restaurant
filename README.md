@@ -223,6 +223,96 @@ sequenceDiagram
 
 ---
 
+### 6. Sequence Diagram: Input & Bayar Pesanan
+Alur proses dari pelanggan memilih menu hingga melakukan pembayaran.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Customer
+    participant Frontend as Mobile App
+    participant Backend as Express API
+    participant PG as PostgreSQL
+    participant Midtrans as Midtrans Gateway
+
+    Customer->>Frontend: Klik Pesan (Checkout)
+    Frontend->>Backend: POST /api/orders (items, table_id)
+    Backend->>PG: INSERT INTO "Orders" (status: 'pending')
+    PG-->>Backend: Order Created (ID: 101)
+    Backend-->>Frontend: Success (Order ID)
+    
+    Customer->>Frontend: Pilih Metode Bayar (QRIS/Card)
+    Frontend->>Backend: POST /api/payments/:order_id
+    Backend->>Midtrans: Create Transaction Request
+    Midtrans-->>Backend: Token/Snap URL
+    Backend-->>Frontend: Snap URL/QR Data
+    
+    Midtrans->>Backend: Webhook Notification (Success)
+    Backend->>PG: UPDATE "Orders" (payment_status: 'paid')
+    Backend->>PG: SELECT items (Calculate stats)
+    Backend->>PG: UPDATE "SalesStats"
+```
+
+---
+
+### 7. Sequence Diagram: Update Status Pesanan & Dashboard
+Bagaimana Staff memproses pesanan dan Owner melihat hasil akhirnya.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Staff
+    actor Owner
+    participant Frontend as Dashboard UI
+    participant Backend as Express API
+    participant PG as PostgreSQL
+
+    Staff->>Frontend: Klik 'Terima' Pesanan
+    Frontend->>Backend: PUT /api/orders/:id/status (Preparing)
+    Backend->>PG: UPDATE "Orders" SET status = 'preparing'
+    PG-->>Backend: Success
+    Backend-->>Frontend: Updated UI
+    
+    Note over Owner, PG: --- Skenario Analitik ---
+    
+    Owner->>Frontend: Buka Laporan Penjualan
+    Frontend->>Backend: GET /api/owner/reports (Range: Today)
+    Backend->>PG: SELECT * FROM "SalesStats" WHERE date = today
+    PG-->>Backend: Sales Data (Revenue, Count)
+    Backend-->>Frontend: JSON Data for Charts
+    Frontend->>Frontend: Render Grafik Pendapatan
+```
+
+---
+
+### 8. Sequence Diagram: Manajemen Data (Menu & Staff)
+Proses pengelolaan infrastruktur aplikasi oleh Owner.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Owner
+    participant Frontend as Admin Dashboard
+    participant Backend as Express API
+    participant PG as PostgreSQL
+
+    Note right of Owner: Kelola Menu
+    Owner->>Frontend: Klik 'Tambah Menu'
+    Frontend->>Backend: POST /api/menus (name, price, image)
+    Backend->>PG: INSERT INTO "Menus"
+    PG-->>Backend: Menu Created
+    Backend-->>Frontend: Updated Menu List
+
+    Note right of Owner: Kelola Staff
+    Owner->>Frontend: Registrasi Akun Staff Baru
+    Frontend->>Backend: POST /api/auth/register (role: 'staff')
+    Backend->>PG: INSERT INTO "users" (password_hash)
+    PG-->>Backend: Staff Created
+    Backend-->>Frontend: Success (Staff Added)
+```
+
+---
+
 ## 📂 Project Directory
 - `/controllers`: Logika endpoint (Auth, Orders, Menu).
 - `/models`: Definisi skema database PostgreSQL.
