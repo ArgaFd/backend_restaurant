@@ -364,7 +364,7 @@ exports.createOrder = async (req, res) => {
 ```
 
 ### 4.4 Implementasi Antarmuka (Interface)
-Berikut adalah perbandingan tampilan antarmuka pengguna yang telah dibangun:
+Berikut adalah perbandingan tampilan antarmuka pengguna yang telah dibangun. **Antarmuka ini merupakan hasil implementasi visual dari logika bisnis yang telah divalidasi melalui pengujian White-Box (Basis Path Testing) pada Bab 5, memastikan bahwa setiap tombol dan alur yang terlihat telah teruji secara struktural.**
 
 #### 1. Sisi Pelanggan (Mobile First)
 Halaman ini menggunakan komponen React dengan Tailwind CSS untuk memastikan tampilan responsif saat pelanggan memindai QR Code.
@@ -420,8 +420,10 @@ graph TD
 Berdasarkan grafik di atas:
 *   **Jumlah Edge (E)**: 16
 *   **Jumlah Node (N)**: 14
-*   **Rumus**: $V(G) = E - N + 2$
-*   **Hitungan**: $16 - 14 + 2 = \mathbf{4}$
+*   **Rumus**:
+    $$V(G) = E - N + 2$$
+*   **Hitungan**:
+    $$16 - 14 + 2 = 4$$
 
 **Kesimpulan**: Terdapat **4 Jalur Independen** yang harus diuji untuk memastikan cakupan logika 100%.
 
