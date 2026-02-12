@@ -1,18 +1,22 @@
 # LAPORAN PRAKTIKUM REKAYASA PERANGKAT LUNAK (RPL)
 **JUDUL: RANCANG BANGUN SISTEM INFORMASI POINT OF SALE (POS) RESTORAN BERBASIS WEB MENGGUNAKAN METODE WATERFALL**
 
+![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
+
 ---
 
 ## 📑 DAFTAR ISI
 
-1.  **BAB 1: PENDAHULUAN**
+1.  **[BAB 1: PENDAHULUAN](#bab-1-pendahuluan)**
     *   1.1 Latar Belakang Masalah
     *   1.2 Identifikasi Masalah
     *   1.3 Batasan Masalah
     *   1.4 Tujuan Penelitian
     *   1.5 Manfaat Penelitian
     *   1.6 Metodologi Pengembangan Sistem
-2.  **BAB 2: LANDASAN TEORI**
+2.  **[BAB 2: LANDASAN TEORI](#bab-2-landasan-teori)**
     *   2.1 Sistem Informasi & Website
     *   2.2 Point of Sale (POS)
     *   2.3 React.js (Frontend Library)
@@ -20,24 +24,20 @@
     *   2.5 Database PostgreSQL
     *   2.6 Unified Modeling Language (UML)
     *   2.7 Pengujian Perangkat Lunak (Testing)
-3.  **BAB 3: ANALISIS DAN PERANCANGAN SISTEM**
+3.  **[BAB 3: ANALISIS DAN PERANCANGAN SISTEM](#bab-3-analisis-dan-perancangan-sistem)**
     *   3.1 Analisis Kebutuhan Fungsional
     *   3.2 Analisis Kebutuhan Non-Fungsional
     *   3.3 Perancangan Sistem (UML)
-        *   3.3.1 Use Case Diagram
-        *   3.3.2 Activity Diagram (Alur Pesanan)
-        *   3.3.3 Sequence Diagram (Proses Checkout)
-        *   3.3.4 Class Diagram
     *   3.4 Perancangan Database (ERD)
-4.  **BAB 4: IMPLEMENTASI SISTEM**
+4.  **[BAB 4: IMPLEMENTASI SISTEM](#bab-4-implementasi-sistem)**
     *   4.1 Lingkungan Pengembangan (Environment)
     *   4.2 Struktur Direktori Proyek
     *   4.3 Implementasi Kode Program Utama
     *   4.4 Implementasi Antarmuka (Interface)
-5.  **BAB 5: PENGUJIAN SISTEM**
+5.  **[BAB 5: PENGUJIAN SISTEM](#bab-5-pengujian-sistem)**
     *   5.1 Pengujian Structural (White-Box Testing)
     *   5.2 Pengujian Fungsional (Black-Box Testing)
-6.  **BAB 6: PENUTUP**
+6.  **[BAB 6: PENUTUP](#bab-6-penutup)**
     *   6.1 Kesimpulan
     *   6.2 Saran
 
@@ -364,22 +364,23 @@ exports.createOrder = async (req, res) => {
 ```
 
 ### 4.4 Implementasi Antarmuka (Interface)
-Hasil implementasi desain antarmuka pengguna sesuai rancangan:
+Berikut adalah perbandingan tampilan antarmuka pengguna yang telah dibangun:
 
-#### A. Halaman Customer (Menu)
-Tampilan mobile-first yang responsif memudahkan pelanggan memilih menu.
+#### 1. Sisi Pelanggan (Mobile First)
+Halaman ini menggunakan komponen React dengan Tailwind CSS untuk memastikan tampilan responsif saat pelanggan memindai QR Code.
 
-![UI Customer](assets/laporan_rpl/ui_customer_menu.png)
+| Menu Digital (Katalog) |
+| :---: |
+| ![UI Customer](assets/laporan_rpl/ui_customer_menu.png) |
+| *Fitur: Filter Kategori, Search Bar, & Add to Cart* |
 
-#### B. Halaman Staff (Dashboard)
-Tampilan Kanban Board untuk manajemen status pesanan efisien di dapur.
+#### 2. Sisi Manajemen (Desktop View)
+Dashboard operasional untuk Staff dan Owner dengan fitur *Real-time Update* menggunakan Webhook Midtrans.
 
-![UI Staff](assets/laporan_rpl/ui_staff_dashboard.png)
-
-#### C. Halaman Owner (Laporan)
-Grafik interaktif untuk analisis bisnis.
-
-![UI Owner](assets/laporan_rpl/ui_owner_analytics.png)
+| Dashboard Kitchen (Staff) | Analitik Penjualan (Owner) |
+| :---: | :---: |
+| ![UI Staff](assets/laporan_rpl/ui_staff_dashboard.png) | ![UI Owner](assets/laporan_rpl/ui_owner_analytics.png) |
+| *Fitur: Kanban Board status pesanan (Cooking/Served)* | *Fitur: Grafik Omzet Harian & Top Selling Menu* |
 
 ---
 
@@ -389,7 +390,7 @@ Grafik interaktif untuk analisis bisnis.
 Menguji logika internal kode menggunakan metode **Basis Path Testing** pada fitur Checkout.
 
 #### 5.1.1 Flowgraph (Control Flow)
-Grafik alur logika dengan 14 Node.
+Grafik alur logika dengan **14 Node** dan **16 Edge**.
 
 ```mermaid
 graph TD
@@ -397,27 +398,38 @@ graph TD
     classDef proc fill:#e1f5fe,stroke:#0277bd,stroke-width:2px;
     classDef decision fill:#fff9c4,stroke:#fbc02d,stroke-width:2px;
 
-    1((Start)) --> 2[Validasi]
-    2 --> 3{Valid?}
+    1((Start)) --> 2[Validasi Input]
+    2 --> 3{Data Valid?}
     3 -- No --> 1
-    3 -- Yes --> 4[Metode Bayar]
-    4 --> 5{Midtrans?}
-    5 -- Yes --> 6[Req API]
-    5 -- No --> 9[Cash]
-    6 --> 7{Success?}
-    7 -- Yes --> 8[Wait]
-    7 -- No --> 4
-    8 --> 10[Set Pending]
+    3 -- Yes --> 4[Pilih Metode Bayar]
+    4 --> 5{Via Midtrans?}
+    5 -- Yes --> 6[Request API Token]
+    6 --> 7{Token OK?}
+    7 -- No (Error) --> 4
+    7 -- Yes --> 8[Tunggu Pembayaran]
+    8 --> 10[Update Status: Paid]
+    5 -- No (Cash) --> 9[Catat: Pay at Cashier]
     9 --> 10
-    10 --> 11((End))
+    10 --> 11[Simpan ke Database]
+    11 --> 12[Update Stok Bahan]
+    12 --> 13[Cetak Struk Dapur]
+    13 --> 14((End))
 ```
-**Penjelasan Flowgraph:**
-Grafik di atas memetakan logika percabangan code. Node 1 adalah titik awal (Start), Node 3 dan 5 adalah titik keputusan (Decision Points), dan Node 11 adalah akhir proses (End). Alur ini memastikan bahwa setiap input, baik valid maupun invalid, memiliki jalur penyelesaian yang jelas.
 
 #### 5.1.2 Perhitungan Kompleksitas (V(G))
-*   **V(G) = E - N + 2**
-*   V(G) = 16 - 14 + 2 = **4**.
-*   Kesimpulan: Terdapat 4 jalur logika independen yang perlu diuji.
+Berdasarkan grafik di atas:
+*   **Jumlah Edge (E)**: 16
+*   **Jumlah Node (N)**: 14
+*   **Rumus**: $V(G) = E - N + 2$
+*   **Hitungan**: $16 - 14 + 2 = \mathbf{4}$
+
+**Kesimpulan**: Terdapat **4 Jalur Independen** yang harus diuji untuk memastikan cakupan logika 100%.
+
+#### 5.1.3 Jalur Independen (*Basis Paths*)
+1.  **Jalur 1**: 1-2-3-1 (Input Invalid)
+2.  **Jalur 2**: 1-2-3-4-5-6-7-4 (API Error)
+3.  **Jalur 3**: 1-2-3-4-5-6-7-8-10-11-12-13-14 (Sukses Digital)
+4.  **Jalur 4**: 1-2-3-4-5-9-10-11-12-13-14 (Sukses Tunai)
 
 ### 5.2 Pengujian Fungsional (Black-Box Testing)
 Menguji fungsionalitas sistem berdasarkan input dan output tanpa melihat kode.
